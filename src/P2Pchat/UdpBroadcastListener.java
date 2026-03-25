@@ -1,36 +1,57 @@
 package P2Pchat;
 
-import java.net.*;
+import java.net.DatagramPacket;
+import java.net.DatagramSocket;
+import java.net.InetSocketAddress;
 
 public class UdpBroadcastListener implements Runnable {
-    private final PeerNode node;
-    private final int port;
 
-    public UdpBroadcastListener(PeerNode node, int port) { this.node = node; this.port = port; }
+    private final PeerNode owner;
+    private final int udpPort;
+
+    public UdpBroadcastListener(PeerNode owner, int udpPort) {
+        this.owner = owner;
+        this.udpPort = udpPort;
+    }
 
     @Override
     public void run() {
-        try {
-            DatagramSocket ds = new DatagramSocket(null);
-            ds.setReuseAddress(true);
-            ds.bind(new InetSocketAddress(node.getLocalIp(), port));
-            byte[] buf = new byte[1024];
+        try (DatagramSocket socket = new DatagramSocket(null)) {
+            socket.setReuseAddress(true);
+            socket.bind(new InetSocketAddress(owner.getLocalIp(), udpPort));
+
+            byte[] buffer = new byte[1024];
 
             while (true) {
-                DatagramPacket dp = new DatagramPacket(buf, buf.length);
-                ds.receive(dp);
-                String data = new String(dp.getData(), 0, dp.getLength());
-                String[] parts = data.split(":");
+                DatagramPacket packet = new DatagramPacket(buffer, buffer.length);
+                socket.receive(packet);
 
-                if (parts.length == 3) {
-                    String name = parts[0], ip = parts[1];
-                    int tPort = Integer.parseInt(parts[2]);
-
-                    if (!ip.equals(node.getLocalIp()) || tPort != node.getTcpPort()) {
-                        node.connectToPeer(ip, tPort, name);
-                    }
-                }
+                String payload = new String(packet.getData(), 0, packet.getLength());
+                handleDiscoveryPacket(payload);
             }
-        } catch (Exception ignored) {}
+        } catch (Exception ignored) {
+        }
+    }
+
+    private void handleDiscoveryPacket(String payload) {
+        String[] parts = payload.split(":");
+        if (parts.length != 3) {
+            return;
+        }
+
+        String remoteName = parts[0];
+        String remoteIp = parts[1];
+
+        int remoteTcpPort;
+        try {
+            remoteTcpPort = Integer.parseInt(parts[2]);
+        } catch (NumberFormatException e) {
+            return;
+        }
+        if (remoteIp.equals(owner.getLocalIp()) && remoteTcpPort == owner.getTcpPort()) {
+            return;
+        }
+
+        owner.connectToRemotePeer(remoteIp, remoteTcpPort, remoteName);
     }
 }

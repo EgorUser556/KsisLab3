@@ -1,24 +1,39 @@
 package P2Pchat;
 
-import java.net.*;
+import java.net.InetSocketAddress;
+import java.net.ServerSocket;
+import java.net.Socket;
 
 public class TcpServer implements Runnable {
-    private final PeerNode node;
-    private final String ip;
-    private final int port;
 
-    public TcpServer(PeerNode node, String ip, int port) { this.node = node; this.ip = ip; this.port = port; }
+    private final PeerNode owner;
+    private final String bindIp;
+    private final int listenPort;
+
+    public TcpServer(PeerNode owner, String bindIp, int listenPort) {
+        this.owner = owner;
+        this.bindIp = bindIp;
+        this.listenPort = listenPort;
+    }
 
     @Override
     public void run() {
-        try (ServerSocket ss = new ServerSocket()) {
-            ss.bind(new InetSocketAddress(ip, port));
+        try (ServerSocket server = new ServerSocket()) {
+            server.bind(new InetSocketAddress(bindIp, listenPort));
             while (true) {
-                Socket s = ss.accept();
-                PeerInfo p = new PeerInfo("Unknown", s.getInetAddress().getHostAddress(), s.getPort());
-                p.setSocket(s);
-                new Thread(new PeerConnectionHandler(node, s, p)).start();
+                Socket socket = server.accept();
+
+                PeerInfo peer = new PeerInfo(
+                        "Unknown",
+                        socket.getInetAddress().getHostAddress(),
+                        socket.getPort()
+                );
+                peer.attach(socket);
+
+                Thread handlerThread = new Thread(new PeerConnectionHandler(owner, socket, peer));
+                handlerThread.start();
             }
-        } catch (Exception ignored) {}
+        } catch (Exception ignored) {
+        }
     }
 }

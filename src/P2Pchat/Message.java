@@ -5,53 +5,64 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 
 public class Message implements Serializable {
-    private final MessageType type;
-    private final String content;
-    private final String senderName;
-    private final String senderIp;
-    private final int senderTcpPort;
-    private final LocalDateTime timestamp;
 
-    public Message(MessageType type, String content, String senderName, String senderIp, int senderTcpPort) {
+    private final Type type;
+    private final String body;
+    private final String authorName;
+    private final String authorIp;
+    private final int authorTcpPort;
+    private final LocalDateTime createdAt;
+
+    public Message(Type type,
+                   String body,
+                   String author,
+                   String authorIp,
+                   int authorTcpPort) {
         this.type = type;
-        this.content = content;
-        this.senderName = senderName;
-        this.senderIp = senderIp;
-        this.senderTcpPort = senderTcpPort;
-        this.timestamp = LocalDateTime.now();
+        this.body = body;
+        this.authorName = author;
+        this.authorIp = authorIp;
+        this.authorTcpPort = authorTcpPort;
+        this.createdAt = LocalDateTime.now();
     }
 
     public String getFormattedMessage() {
         DateTimeFormatter formatter = DateTimeFormatter.ofPattern("HH:mm:ss");
-        String timeStr = timestamp.format(formatter);
+        String time = createdAt.format(formatter);
 
         return switch (type) {
-            case CHAT_MESSAGE -> String.format("[%s] %s (%s): %s", timeStr, senderName, senderIp, content);
-            case PEER_CONNECTED -> String.format("[%s] +++ %s (%s) connected", timeStr, senderName, senderIp);
-            case PEER_DISCONNECTED -> String.format("[%s] --- %s (%s) disconnected", timeStr, senderName, senderIp);
-            case HISTORY_REQUEST -> String.format("[%s] [History requested from %s (%s)]", timeStr, senderName, senderIp);
-            case HISTORY_RESPONSE -> String.format("[%s] [History received from %s (%s)]", timeStr, senderName, senderIp);
-            default -> String.format("[%s] %s", timeStr, content);
+            case TEXT -> String.format("[%s] %s (%s): %s",
+                    time, authorName, authorIp, body);
+            case NODE_JOIN -> String.format("[%s] %s (%s) подключился",
+                    time, authorName, authorIp);
+            case NODE_LEAVE -> String.format("[%s] %s (%s) отключился",
+                    time, authorName, authorIp);
+            case HISTORY_GET -> String.format("[%s] [История запрошена у %s (%s)]",
+                    time, authorName, authorIp);
+            case HISTORY_DATA -> String.format("[%s] [История получена от %s (%s)]",
+                    time, authorName, authorIp);
+            case INTRO -> String.format("[%s] [Intro from %s (%s)]",
+                    time, authorName, authorIp);
         };
     }
 
-    public MessageType getType() {
+    public Type getType() {
         return type;
     }
 
-    public String getContent() {
-        return content;
+    public String getBody() {
+        return body;
     }
 
-    public String getSenderName() {
-        return senderName;
+    public String getAuthorName() {
+        return authorName;
     }
 
     public String getSenderIp() {
-        return senderIp;
+        return authorIp;
     }
 
-    public int getSenderTcpPort() {
-        return senderTcpPort;
+    public int getAuthorTcpPort() {
+        return authorTcpPort;
     }
 }

@@ -1,24 +1,32 @@
 package P2Pchat;
 
-import java.io.*;
+import java.io.ObjectInputStream;
 import java.net.Socket;
 
-public record PeerConnectionHandler(PeerNode node, Socket s, PeerInfo p) implements Runnable {
+public record PeerConnectionHandler(PeerNode node, Socket socket, PeerInfo peer) implements Runnable {
 
     @Override
     public void run() {
-        try (ObjectInputStream in = new ObjectInputStream(s.getInputStream())) {
+        try (ObjectInputStream in = new ObjectInputStream(socket.getInputStream())) {
             while (true) {
-                Message m = (Message) in.readObject();
-                switch (m.getType()) {
-                    case NAME_TRANSFER -> node.onPeerIdentified(p, m);
-                    case CHAT_MESSAGE -> node.addMsg(m);
-                    case HISTORY_REQUEST -> node.sendHistory(p);
-                    case HISTORY_RESPONSE -> node.receiveHistory(m.getContent(), m.getSenderName(), m.getSenderIp());
+                Object obj = in.readObject();
+                if (!(obj instanceof Message msg)) {
+                    continue;
+                }
+
+                switch (msg.getType()) {
+                    case INTRO -> node.handlePeerIntroduction(peer, msg);
+                    case TEXT -> node.appendMessageToHistory(msg);
+                    case HISTORY_GET -> node.sendHistory(peer);
+                    case HISTORY_DATA -> node.receiveChatHistory(
+                            msg.getBody(),
+                            msg.getAuthorName(),
+                            msg.getSenderIp()
+                    );
                 }
             }
         } catch (Exception e) {
-            node.handleDisconnect(p);
+            node.handleDisconnect(peer);
         }
     }
 }
