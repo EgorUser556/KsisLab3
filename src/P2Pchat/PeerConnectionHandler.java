@@ -7,7 +7,7 @@ public record PeerConnectionHandler(PeerNode node, Socket socket, PeerInfo peer)
 
     @Override
     public void run() {
-        try (ObjectInputStream in = new ObjectInputStream(socket.getInputStream())) {
+        try (socket; ObjectInputStream in = new ObjectInputStream(socket.getInputStream())) {
             while (true) {
                 Object obj = in.readObject();
                 if (!(obj instanceof Message msg)) {

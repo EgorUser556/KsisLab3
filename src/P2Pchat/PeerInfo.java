@@ -14,6 +14,7 @@ public class PeerInfo {
     private final String host;
     private int tcpPort;
     private ObjectOutputStream output;
+    private Socket socket;
 
     public PeerInfo(String alias, String host, int tcpPort) {
         this.alias = alias;
@@ -22,9 +23,19 @@ public class PeerInfo {
     }
 
     public synchronized void attach(Socket socket) throws IOException {
+        this.socket = socket;
         ObjectOutputStream stream = new ObjectOutputStream(socket.getOutputStream());
         stream.flush();
         this.output = stream;
+    }
+
+    public synchronized void close() {
+        try {
+            if (output != null) output.close();
+        } catch (IOException ignored) {}
+        try {
+            if (socket != null) socket.close();
+        } catch (IOException ignored) {}
     }
 
     public int getPort() {
@@ -69,6 +80,7 @@ class PeerNode {
 
     private MessageListener listener;
     private volatile boolean historyRequested = false;
+    private TcpServer tcpServer;
 
     public interface MessageListener {
         void onMessage(String msg);
@@ -86,7 +98,8 @@ class PeerNode {
     }
 
     public void start() {
-        executor.execute(new TcpServer(this, bindIp, tcpPort));
+        tcpServer = new TcpServer(this, bindIp, tcpPort);
+        executor.execute(tcpServer);
         executor.execute(new UdpBroadcastListener(this, udpPort));
         broadcastPresence();
     }
@@ -109,6 +122,10 @@ class PeerNode {
 
     public synchronized void connectToRemotePeer(String ip, int port, String remoteName) {
         String key = ip + ":" + port;
+        if (ip.equals(bindIp) && port == tcpPort) {
+            return;
+        }
+
         if (peers.containsKey(key)) {
             return;
         }
@@ -139,7 +156,17 @@ class PeerNode {
     public void handlePeerIntroduction(PeerInfo peer, Message msg) {
         peer.setName(msg.getAuthorName());
         peer.setPort(msg.getAuthorTcpPort());
-        peers.put(peer.key(), peer);
+
+        String key = peer.key();
+        PeerInfo existing = peers.putIfAbsent(key, peer);
+        if (existing != null && existing != peer) {
+            // Дубликат — уже есть исходящее соединение к этому пиру.
+            // Закрываем входящий дубль.
+            peer.close();
+            return;
+        }
+
+        notifyPeerConnected(peer);
 
         if (!historyRequested) {
             historyRequested = true;
@@ -208,6 +235,15 @@ class PeerNode {
         }
     }
 
+    public void shutdown() {
+        for (PeerInfo peer : peers.values()) {
+            peer.close();
+        }
+        peers.clear();
+        if (tcpServer != null) tcpServer.close();
+        executor.shutdownNow();
+    }
+
     public void sendHistory(PeerInfo peer) {
         Message m = new Message(
                 Type.HISTORY_DATA,
@@ -274,4 +310,3 @@ class PeerNode {
         return tcpPort;
     }
 }
-
